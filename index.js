@@ -1,43 +1,26 @@
 import express from "express";
 import OpenAI from "openai";
 import bodyParser from "body-parser";
+import cors from "cors";
+import multer from "multer";
 import fetch from "node-fetch";
 import "dotenv/config";
-import fs from "fs";
-import multer from "multer";
-import cors from "cors";
 
 const app = express();
 app.use(express.json());
 app.use(cors());
 app.use(bodyParser.json());
 
-// Set up multer storage for image uploads
-const storage = multer.diskStorage({
-  destination: function (req, file, cb) {
-    cb(null, "uploads/");
-  },
-  filename: function (req, file, cb) {
-    const uniqueSuffix = Date.now() + "-" + Math.round(Math.random() * 1e9);
-    const fileExtension = file.originalname.split(".").pop();
-    cb(null, uniqueSuffix + "." + fileExtension);
-  },
-});
-
-const upload = multer({ storage: storage });
-
 const openai = new OpenAI({
   organization: process.env.ORG,
   apiKey: process.env.API_KEY,
 });
 
-// app.get("/", (req, res) => {
-//   res.send("<p>Server is running</p>");
-// });
+// Set up multer to handle image uploads in memory
+const upload = multer();
 
-async function query(filename) {
+async function query(imageBuffer) {
   try {
-    const data = fs.readFileSync(filename);
     const response = await fetch(
       "https://api-inference.huggingface.co/models/microsoft/git-large-coco",
       {
@@ -45,7 +28,7 @@ async function query(filename) {
           Authorization: "Bearer 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",
         },
         method: "POST",
-        body: data,
+        body: imageBuffer,
       }
     );
     const result = await response.json();
@@ -56,24 +39,32 @@ async function query(filename) {
   }
 }
 
-// Handle image uploads
+// Handle image uploads without saving to disk
 app.post("/", upload.single("image"), async (req, res) => {
   try {
     if (!req.file) {
       return res.status(400).send("No file uploaded.");
     }
 
-    const ans = await query(req.file.path);
+    const ans = await query(req.file.buffer);
     console.log("Image Analysis Result:", ans);
 
     const chatCompletion = await openai.chat.completions.create({
       model: "gpt-3.5-turbo",
       messages: [
         {
+          role: "system",
+          content:
+            "You are a helpful assistant that generates social media captions.",
+        },
+        {
           role: "user",
           content:
-            "Generate 3 social media captions for the given description of the image " +
-            JSON.stringify(ans),
+            "Generate 3 social media captions for the given description of the image.",
+        },
+        {
+          role: "assistant",
+          content: JSON.stringify(ans),
         },
       ],
     });
