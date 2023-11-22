@@ -13,7 +13,7 @@ app.use(bodyParser.json());
 
 const openai = new OpenAI({
   organization: process.env.ORG,
-  apiKey: process.env.API_KEY,
+  apiKey: process.env.openai.api_key,
 });
 
 // Set up multer to handle image uploads in memory
